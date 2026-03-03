@@ -747,20 +747,6 @@ def main():
 
     # Sidebar
     with st.sidebar:
-        st.header("⚙️ Configuration")
-
-        # Theme toggle
-        dark_mode = st.toggle("🌙 Dark Mode", value=st.session_state.dark_mode)
-        st.session_state.dark_mode = dark_mode
-
-        # Auto refresh
-        auto_refresh = st.checkbox("🔄 Auto Refresh (5 min)", value=False)
-        if auto_refresh:
-            st.caption("Page will auto-refresh every 5 minutes")
-            st.markdown("<meta http-equiv='refresh' content='300'>", unsafe_allow_html=True)
-
-        st.divider()
-
         # Analysis mode
         analysis_mode = st.radio(
             "Analysis Mode",
