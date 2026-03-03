@@ -1,7 +1,7 @@
 # pr_analyzer.py
 from typing import List, Dict, Any, Tuple
 from datetime import datetime
-from collections import Counter
+from collections import Counter, defaultdict
 from github import PullRequest
 from config import (
     AI_DETECTION_ENABLED,
@@ -184,8 +184,6 @@ def analyze_contributors(prs: List[PullRequest]) -> Dict[str, Dict[str, Any]]:
 
     Returns dict mapping username to their stats.
     """
-    from collections import defaultdict
-
     stats = defaultdict(lambda: {
         'total_prs': 0,
         'merged': 0,
@@ -200,11 +198,10 @@ def analyze_contributors(prs: List[PullRequest]) -> Dict[str, Dict[str, Any]]:
         stats[username]['total_prs'] += 1
 
         # Count by state
-        if pr.merged_at:
+        if pr.merged_at is not None:
             stats[username]['merged'] += 1
             merge_time = calculate_merge_time_hours(pr)
-            if merge_time > 0:
-                stats[username]['merge_times'].append(merge_time)
+            stats[username]['merge_times'].append(merge_time)
         elif pr.state == 'open':
             stats[username]['open'] += 1
         else:
