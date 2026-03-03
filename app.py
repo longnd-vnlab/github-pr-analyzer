@@ -376,7 +376,8 @@ def display_analysis_results(metrics, period_name, repo_names=None, aggregate_mo
                     metrics,
                     period_name,
                     repo_names,
-                    aggregate_mode
+                    aggregate_mode,
+                    metrics.get('contributors')
                 )
                 st.download_button(
                     label="📄 Export PDF",

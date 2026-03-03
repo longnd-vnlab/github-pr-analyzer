@@ -13,7 +13,27 @@ from reportlab.platypus import (
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 
 
-def generate_pdf_report(metrics, period_name, repo_names, aggregate_mode=False):
+# Helper function to detect AI PRs (copied from pr_analyzer to avoid circular import)
+def is_ai_pr(pr):
+    """Check if a PR is AI-generated based on branch name or author."""
+    ai_branch_prefixes = ['claude/', 'devin/', 'ai/', 'bot/', 'gpt/']
+    ai_authors = ['devin-ai-integration', 'github-actions', 'dependabot']
+
+    branch = pr.head.ref.lower()
+    author = pr.user.login.lower()
+
+    for prefix in ai_branch_prefixes:
+        if branch.startswith(prefix):
+            return True
+
+    for ai_author in ai_authors:
+        if ai_author in author:
+            return True
+
+    return False
+
+
+def generate_pdf_report(metrics, period_name, repo_names, aggregate_mode=False, contributors_stats=None):
     """Generate a PDF report from PR analysis metrics.
 
     Args:
@@ -21,6 +41,7 @@ def generate_pdf_report(metrics, period_name, repo_names, aggregate_mode=False):
         period_name: String representing the analysis period
         repo_names: List of repository names analyzed
         aggregate_mode: Boolean indicating if multiple repos were aggregated
+        contributors_stats: Dictionary containing detailed contributor statistics
 
     Returns:
         BytesIO buffer containing the PDF
@@ -244,6 +265,50 @@ def generate_pdf_report(metrics, period_name, repo_names, aggregate_mode=False):
 
     elements.append(PageBreak())
 
+    # PR Timeline Section
+    if metrics.get('prs_by_date'):
+        elements.append(Paragraph("PR Timeline", heading_style))
+        elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#3B82F6')))
+        elements.append(Spacer(1, 15))
+
+        prs_by_date = metrics['prs_by_date']
+        if prs_by_date:
+            dates = sorted(prs_by_date.keys())
+            # Show first 10 and last 10 entries if too many
+            if len(dates) > 20:
+                display_dates = dates[:5] + ['...'] + dates[-5:]
+                display_counts = [prs_by_date[d] for d in dates[:5]] + ['...'] + [prs_by_date[d] for d in dates[-5:]]
+            else:
+                display_dates = dates
+                display_counts = [prs_by_date[d] for d in dates]
+
+            timeline_data = [['Date', 'PR Count']]
+            for date, count in zip(display_dates, display_counts):
+                timeline_data.append([str(date), str(count) if count != '...' else '...'])
+
+            timeline_table = Table(timeline_data, colWidths=[60*mm, 30*mm])
+            timeline_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E40AF')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 11),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#F8FAFC')),
+                ('TEXTCOLOR', (0, 1), (-1, -1), colors.HexColor('#1E3A8A')),
+                ('ALIGN', (0, 1), (0, -1), 'LEFT'),
+                ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),
+                ('FONTNAME', (1, 1), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 1), (-1, -1), 10),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 10),
+                ('TOPPADDING', (0, 0), (-1, -1), 8),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F1F5F9')]),
+            ]))
+            elements.append(timeline_table)
+            elements.append(Spacer(1, 20))
+
     # Top Contributors Section
     if metrics.get('top_contributors'):
         elements.append(Paragraph("Top Contributors", heading_style))
@@ -279,6 +344,122 @@ def generate_pdf_report(metrics, period_name, repo_names, aggregate_mode=False):
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F1F5F9')]),
         ]))
         elements.append(contrib_table)
+        elements.append(Spacer(1, 20))
+
+    # PR Details Section
+    if metrics.get('all_prs'):
+        elements.append(PageBreak())
+        elements.append(Paragraph("Pull Request Details", heading_style))
+        elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#3B82F6')))
+        elements.append(Spacer(1, 15))
+
+        all_prs = metrics['all_prs'][:50]  # Limit to first 50 PRs to avoid huge PDFs
+
+        pr_data = [['#', 'Title', 'Author', 'State', 'AI']]
+        for pr in all_prs:
+            pr_data.append([
+                f"#{pr.number}",
+                pr.title[:40] + '...' if len(pr.title) > 40 else pr.title,
+                pr.user.login,
+                'Merged' if pr.merged_at else pr.state.capitalize(),
+                'Yes' if is_ai_pr(pr) else 'No'
+            ])
+
+        pr_table = Table(pr_data, colWidths=[18*mm, 75*mm, 35*mm, 22*mm, 15*mm], repeatRows=1)
+        pr_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E40AF')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#F8FAFC')),
+            ('TEXTCOLOR', (0, 1), (0, -1), colors.HexColor('#1E3A8A')),
+            ('TEXTCOLOR', (1, 1), (-1, -1), colors.HexColor('#334155')),
+            ('ALIGN', (0, 1), (0, -1), 'LEFT'),
+            ('ALIGN', (2, 1), (4, -1), 'CENTER'),
+            ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),
+            ('FONTNAME', (1, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 4),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+            ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F1F5F9')]),
+        ]))
+        elements.append(pr_table)
+
+        if len(metrics['all_prs']) > 50:
+            elements.append(Spacer(1, 10))
+            elements.append(Paragraph(
+                f"<i>... and {len(metrics['all_prs']) - 50} more PRs</i>",
+                ParagraphStyle('Note', parent=normal_style, textColor=colors.HexColor('#64748B'))
+            ))
+        elements.append(Spacer(1, 20))
+
+    # Detailed Contributor Statistics Section
+    if contributors_stats:
+        elements.append(PageBreak())
+        elements.append(Paragraph("Detailed Contributor Statistics", heading_style))
+        elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#3B82F6')))
+        elements.append(Spacer(1, 15))
+
+        # Sort by Total PRs descending
+        sorted_contributors = dict(sorted(
+            contributors_stats.items(),
+            key=lambda x: x[1]['total_prs'],
+            reverse=True
+        ))
+
+        contrib_detail_data = [['Username', 'Total', 'Merged', 'Open', 'Closed', 'Merge %', 'Avg Time', 'AI PRs', 'PRs/Wk']]
+
+        for username, stats in list(sorted_contributors.items())[:20]:  # Top 20 contributors
+            avg_time = stats['avg_merge_time_hours']
+            avg_time_str = f"{avg_time:.1f}h" if avg_time > 0 else "N/A"
+
+            contrib_detail_data.append([
+                username,
+                f"{stats['total_prs']}",
+                f"{stats['merged']}",
+                f"{stats['open']}",
+                f"{stats['closed']}",
+                f"{stats['merge_rate']:.1f}%",
+                avg_time_str,
+                f"{stats['ai_prs']}",
+                f"{stats['prs_per_week']:.2f}"
+            ])
+
+        # Use smaller font and column widths to fit all columns
+        contrib_detail_table = Table(
+            contrib_detail_data,
+            colWidths=[32*mm, 16*mm, 16*mm, 14*mm, 16*mm, 18*mm, 18*mm, 14*mm, 16*mm],
+            repeatRows=1
+        )
+        contrib_detail_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E40AF')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#F8FAFC')),
+            ('TEXTCOLOR', (0, 1), (0, -1), colors.HexColor('#1E3A8A')),
+            ('TEXTCOLOR', (1, 1), (-1, -1), colors.HexColor('#334155')),
+            ('ALIGN', (0, 1), (0, -1), 'LEFT'),
+            ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),
+            ('FONTNAME', (1, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 4),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F1F5F9')]),
+        ]))
+        elements.append(contrib_detail_table)
         elements.append(Spacer(1, 20))
 
     # Top Labels Section
