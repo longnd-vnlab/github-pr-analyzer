@@ -179,7 +179,7 @@ def analyze_comparison(prs_month1: List[PullRequest], prs_month2: List[PullReque
     }
 
 
-def analyze_contributors(prs: List[PullRequest]) -> Dict[str, Dict[str, Any]]:
+def analyze_contributors(prs: List[PullRequest], start_date: datetime = None, end_date: datetime = None) -> Dict[str, Dict[str, Any]]:
     """Calculate statistics for each contributor.
 
     Returns dict mapping username to their stats.
@@ -212,6 +212,12 @@ def analyze_contributors(prs: List[PullRequest]) -> Dict[str, Dict[str, Any]]:
             stats[username]['ai_prs'] += 1
 
     # Calculate derived metrics
+    # Calculate weeks in period
+    weeks = 1.0
+    if start_date and end_date:
+        delta = end_date - start_date
+        weeks = max(1.0, delta.days / 7)
+
     result = {}
     for username, user_stats in stats.items():
         total = user_stats['total_prs']
@@ -226,7 +232,7 @@ def analyze_contributors(prs: List[PullRequest]) -> Dict[str, Dict[str, Any]]:
             'merge_rate': (merged / total * 100) if total > 0 else 0.0,
             'avg_merge_time_hours': sum(user_stats['merge_times']) / len(user_stats['merge_times']) if user_stats['merge_times'] else 0.0,
             'ai_prs': user_stats['ai_prs'],
-            'prs_per_week': 0.0,  # Will be calculated by caller with date range
+            'prs_per_week': total / weeks,
             'comments_per_pr': None,  # Lazy loaded
         }
 
