@@ -274,17 +274,10 @@ def generate_pdf_report(metrics, period_name, repo_names, aggregate_mode=False, 
         prs_by_date = metrics['prs_by_date']
         if prs_by_date:
             dates = sorted(prs_by_date.keys())
-            # Show first 10 and last 10 entries if too many
-            if len(dates) > 20:
-                display_dates = dates[:5] + ['...'] + dates[-5:]
-                display_counts = [prs_by_date[d] for d in dates[:5]] + ['...'] + [prs_by_date[d] for d in dates[-5:]]
-            else:
-                display_dates = dates
-                display_counts = [prs_by_date[d] for d in dates]
 
             timeline_data = [['Date', 'PR Count']]
-            for date, count in zip(display_dates, display_counts):
-                timeline_data.append([str(date), str(count) if count != '...' else '...'])
+            for date in dates:
+                timeline_data.append([str(date), str(prs_by_date[date])])
 
             timeline_table = Table(timeline_data, colWidths=[60*mm, 30*mm])
             timeline_table.setStyle(TableStyle([
@@ -318,7 +311,7 @@ def generate_pdf_report(metrics, period_name, repo_names, aggregate_mode=False, 
         contributors_data = [['Rank', 'Contributor', 'PRs', 'Percentage']]
         total_prs = sum(count for _, count in metrics['top_contributors'])
 
-        for rank, (author, count) in enumerate(metrics['top_contributors'][:10], 1):
+        for rank, (author, count) in enumerate(metrics['top_contributors'], 1):  # ALL contributors
             percentage = (count / total_prs * 100) if total_prs > 0 else 0
             contributors_data.append([str(rank), author, f"{count:,}", f"{percentage:.1f}%"])
 
@@ -353,13 +346,13 @@ def generate_pdf_report(metrics, period_name, repo_names, aggregate_mode=False, 
         elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#3B82F6')))
         elements.append(Spacer(1, 15))
 
-        all_prs = metrics['all_prs'][:50]  # Limit to first 50 PRs to avoid huge PDFs
+        all_prs = metrics['all_prs']  # Include ALL PRs
 
         pr_data = [['#', 'Title', 'Author', 'State', 'AI']]
         for pr in all_prs:
             pr_data.append([
                 f"#{pr.number}",
-                pr.title[:40] + '...' if len(pr.title) > 40 else pr.title,
+                pr.title,  # Full title without truncation
                 pr.user.login,
                 'Merged' if pr.merged_at else pr.state.capitalize(),
                 'Yes' if is_ai_pr(pr) else 'No'
@@ -390,13 +383,6 @@ def generate_pdf_report(metrics, period_name, repo_names, aggregate_mode=False, 
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F1F5F9')]),
         ]))
         elements.append(pr_table)
-
-        if len(metrics['all_prs']) > 50:
-            elements.append(Spacer(1, 10))
-            elements.append(Paragraph(
-                f"<i>... and {len(metrics['all_prs']) - 50} more PRs</i>",
-                ParagraphStyle('Note', parent=normal_style, textColor=colors.HexColor('#64748B'))
-            ))
         elements.append(Spacer(1, 20))
 
     # Detailed Contributor Statistics Section
@@ -415,7 +401,7 @@ def generate_pdf_report(metrics, period_name, repo_names, aggregate_mode=False, 
 
         contrib_detail_data = [['Username', 'Total', 'Merged', 'Open', 'Closed', 'Merge %', 'Avg Time', 'AI PRs', 'PRs/Wk']]
 
-        for username, stats in list(sorted_contributors.items())[:20]:  # Top 20 contributors
+        for username, stats in sorted_contributors.items():  # ALL contributors
             avg_time = stats['avg_merge_time_hours']
             avg_time_str = f"{avg_time:.1f}h" if avg_time > 0 else "N/A"
 
@@ -469,7 +455,7 @@ def generate_pdf_report(metrics, period_name, repo_names, aggregate_mode=False, 
         elements.append(Spacer(1, 15))
 
         labels_data = [['Label', 'Count']]
-        for label, count in metrics['top_labels'][:10]:
+        for label, count in metrics['top_labels']:  # ALL labels
             labels_data.append([label, f"{count:,}"])
 
         labels_table = Table(labels_data, colWidths=[100*mm, 45*mm])
