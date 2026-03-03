@@ -140,7 +140,6 @@ def get_contributors_data_for_df(contributors_stats):
     data = []
     for username, stats in contributors_stats.items():
         avg_time = stats['avg_merge_time_hours']
-        comments = stats['comments_per_pr']
 
         data.append({
             'Username': username,
@@ -152,13 +151,12 @@ def get_contributors_data_for_df(contributors_stats):
             'Avg Merge Time': f"{avg_time:.1f}h" if avg_time > 0 else "N/A",
             'AI PRs': stats['ai_prs'],
             'PRs/Week': f"{stats['prs_per_week']:.2f}",
-            'Comments/PR': f"{comments:.1f}" if comments is not None else "-",
         })
     return data
 
 
 def display_contributor_statistics(prs, contributors_stats=None, start_date=None, end_date=None):
-    """Display contributor statistics table with lazy-loaded comments."""
+    """Display contributor statistics table."""
     if not prs:
         st.info("No PRs found for contributor analysis")
         return
@@ -179,30 +177,6 @@ def display_contributor_statistics(prs, contributors_stats=None, start_date=None
         key=lambda x: x[1]['total_prs'],
         reverse=True
     ))
-
-    # Lazy load comments button
-    comments_loaded = st.session_state.get('comments_loaded', False)
-
-    col1, col2 = st.columns([1, 4])
-    with col1:
-        if not comments_loaded:
-            if st.button("Load Comments", type="secondary"):
-                with st.spinner("Fetching comments..."):
-                    comments_map = fetch_comments_for_prs(prs)
-
-                    # Update stats with comments
-                    for username, stats in contributors_stats.items():
-                        user_prs = [p for p in prs if p.user.login == username]
-                        total_comments = sum(comments_map.get(p.number, 0) for p in user_prs)
-                        stats['comments_per_pr'] = total_comments / len(user_prs) if user_prs else 0
-
-                    st.session_state['comments_loaded'] = True
-                    st.rerun()
-        else:
-            st.caption("Comments loaded")
-
-    with col2:
-        st.caption("Click 'Load Comments' to fetch average comments per PR (may take time for large repos)")
 
     # Create DataFrame
     data = get_contributors_data_for_df(contributors_stats)
