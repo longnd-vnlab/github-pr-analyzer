@@ -4,6 +4,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from pr_fetcher import fetch_prs_for_month, fetch_prs_for_date_range, parse_repo_url, fetch_comments_for_prs
 from pr_analyzer import analyze_prs, analyze_comparison, is_ai_pr, analyze_contributors
+from pdf_generator import generate_pdf_report
 from config import GITHUB_TOKEN
 
 
@@ -348,7 +349,7 @@ def display_contributor_statistics(prs, contributors_stats=None, start_date=None
         st.metric("Avg Merge Rate", f"{avg_merge_rate:.1f}%")
 
 
-def display_analysis_results(metrics, period_name):
+def display_analysis_results(metrics, period_name, repo_names=None, aggregate_mode=False):
     """Display analysis results for a given time period with enhanced styling."""
 
     # Period info banner
@@ -365,6 +366,27 @@ def display_analysis_results(metrics, period_name):
             📅 Analysis Period: {period_name}
         </div>
     """, unsafe_allow_html=True)
+
+    # PDF Export Button
+    if repo_names:
+        col_export, _ = st.columns([1, 5])
+        with col_export:
+            try:
+                pdf_buffer = generate_pdf_report(
+                    metrics,
+                    period_name,
+                    repo_names,
+                    aggregate_mode
+                )
+                st.download_button(
+                    label="📄 Export PDF",
+                    data=pdf_buffer,
+                    file_name=f"pr-analysis-{period_name.replace(' ', '-').lower()}-{datetime.now().strftime('%Y%m%d')}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+            except Exception as e:
+                st.error(f"Error generating PDF: {e}")
 
     # Display metrics
     display_metrics_cards(metrics)
@@ -918,7 +940,8 @@ def main():
 
                     # Analyze and display
                     metrics = analyze_prs(all_prs)
-                    display_analysis_results(metrics, period_name)
+                    repo_names_list = [f"{owner}/{repo}" for _, owner, repo in valid_repos]
+                    display_analysis_results(metrics, period_name, repo_names_list, aggregate_repos)
 
                 elif analysis_mode == "📅 Date Range":
                     period_name = f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
@@ -931,7 +954,8 @@ def main():
 
                     # Analyze and display
                     metrics = analyze_prs(all_prs)
-                    display_analysis_results(metrics, period_name)
+                    repo_names_list = [f"{owner}/{repo}" for _, owner, repo in valid_repos]
+                    display_analysis_results(metrics, period_name, repo_names_list, aggregate_repos)
 
                 elif analysis_mode == "📈 Compare Months":
                     month1_name = f"{month_names[selected_month - 1]} {selected_year}"
@@ -1000,7 +1024,7 @@ def main():
                                 st.info(f"Analyzing **{len(prs)} PRs** for {period_name}")
                                 # Analyze and display
                                 metrics = analyze_prs(prs)
-                                display_analysis_results(metrics, period_name)
+                                display_analysis_results(metrics, period_name, [f"{owner}/{repo}"], False)
 
                         elif analysis_mode == "📅 Date Range":
                             # Date range analysis
@@ -1019,7 +1043,7 @@ def main():
                                     st.info(f"Analyzing **{len(prs)} PRs** for {period_name}")
                                     # Analyze and display
                                     metrics = analyze_prs(prs)
-                                    display_analysis_results(metrics, period_name)
+                                    display_analysis_results(metrics, period_name, [f"{owner}/{repo}"], False)
 
                         elif analysis_mode == "📈 Compare Months":
                             # Comparison mode
