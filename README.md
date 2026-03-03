@@ -33,6 +33,15 @@ A comprehensive Streamlit application to analyze GitHub Pull Requests for any re
 - **Compare Months**: Compare metrics between two different months
 - **Multiple Repos**: Analyze multiple repositories at once
 
+### Contributor Analysis
+- **Per-User Stats**: Table view showing metrics for each contributor
+  - Total PRs, Merged, Open, Closed counts
+  - Merge Rate percentage
+  - Average Merge Time
+  - AI PRs count
+  - PRs per Week frequency
+  - Comments per PR (lazy loaded)
+
 ## Quick Start
 
 ### 1. Install Dependencies
