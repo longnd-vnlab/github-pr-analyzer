@@ -348,17 +348,30 @@ def generate_pdf_report(metrics, period_name, repo_names, aggregate_mode=False, 
 
         all_prs = metrics['all_prs']  # Include ALL PRs
 
+        # Create cell styles for title wrapping
+        title_style = ParagraphStyle(
+            'TableTitle',
+            parent=normal_style,
+            fontSize=8,
+            leading=10,
+            wordWrap='CJK',
+            alignment=TA_LEFT
+        )
+
         pr_data = [['#', 'Title', 'Author', 'State', 'AI']]
         for pr in all_prs:
+            # Use Paragraph for title to handle long text with proper wrapping
+            title_para = Paragraph(pr.title, title_style)
             pr_data.append([
                 f"#{pr.number}",
-                pr.title,  # Full title without truncation
+                title_para,
                 pr.user.login,
                 'Merged' if pr.merged_at else pr.state.capitalize(),
                 'Yes' if is_ai_pr(pr) else 'No'
             ])
 
-        pr_table = Table(pr_data, colWidths=[18*mm, 75*mm, 35*mm, 22*mm, 15*mm], repeatRows=1)
+        # Adjust column widths - give more space to title
+        pr_table = Table(pr_data, colWidths=[15*mm, 95*mm, 30*mm, 20*mm, 15*mm], repeatRows=1)
         pr_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E40AF')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
