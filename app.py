@@ -352,6 +352,21 @@ def display_contributor_statistics(prs, contributors_stats=None, start_date=None
 def display_analysis_results(metrics, period_name, repo_names=None, aggregate_mode=False):
     """Display analysis results for a given time period with enhanced styling."""
 
+    # Generate and store PDF in session state
+    if repo_names:
+        try:
+            pdf_buffer = generate_pdf_report(
+                metrics,
+                period_name,
+                repo_names,
+                aggregate_mode,
+                metrics.get('contributors')
+            )
+            st.session_state.last_pdf_buffer = pdf_buffer
+            st.session_state.last_pdf_filename = f"pr-analysis-{period_name.replace(' ', '-').lower()}-{datetime.now().strftime('%Y%m%d')}.pdf"
+        except Exception as e:
+            st.error(f"Error generating PDF: {e}")
+
     # Period info banner
     st.markdown(f"""
         <div style="
@@ -366,28 +381,6 @@ def display_analysis_results(metrics, period_name, repo_names=None, aggregate_mo
             📅 Analysis Period: {period_name}
         </div>
     """, unsafe_allow_html=True)
-
-    # PDF Export Button
-    if repo_names:
-        col_export, _ = st.columns([1, 5])
-        with col_export:
-            try:
-                pdf_buffer = generate_pdf_report(
-                    metrics,
-                    period_name,
-                    repo_names,
-                    aggregate_mode,
-                    metrics.get('contributors')
-                )
-                st.download_button(
-                    label="📄 Export PDF",
-                    data=pdf_buffer,
-                    file_name=f"pr-analysis-{period_name.replace(' ', '-').lower()}-{datetime.now().strftime('%Y%m%d')}.pdf",
-                    mime="application/pdf",
-                    use_container_width=True
-                )
-            except Exception as e:
-                st.error(f"Error generating PDF: {e}")
 
     # Display metrics
     display_metrics_cards(metrics)
@@ -741,9 +734,24 @@ def main():
         st.error("⚠️ GITHUB_TOKEN not found. Please set it in your .env file.")
         st.stop()
 
-    # Header
-    st.title("GitHub PR Analyzer")
-    st.markdown("Analyze Pull Requests for any GitHub repository by month")
+    # Header with Export PDF button
+    header_col1, header_col2 = st.columns([6, 1])
+    with header_col1:
+        st.title("GitHub PR Analyzer")
+        st.markdown("Analyze Pull Requests for any GitHub repository by month")
+    with header_col2:
+        # Add vertical spacing to align button with title
+        st.markdown("<br>", unsafe_allow_html=True)
+        # Export PDF button (only show when analysis is done)
+        if st.session_state.get('analysis_results') and st.session_state.get('last_pdf_buffer'):
+            st.download_button(
+                label="📄 Export",
+                data=st.session_state.last_pdf_buffer,
+                file_name=st.session_state.get('last_pdf_filename', 'pr-analysis.pdf'),
+                mime="application/pdf",
+                use_container_width=True,
+                type="primary"
+            )
 
     # Sidebar
     with st.sidebar:
