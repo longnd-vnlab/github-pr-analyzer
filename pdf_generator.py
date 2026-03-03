@@ -358,12 +358,23 @@ def generate_pdf_report(metrics, period_name, repo_names, aggregate_mode=False, 
             alignment=TA_LEFT
         )
 
+        # Style for clickable PR links
+        link_style = ParagraphStyle(
+            'LinkStyle',
+            parent=normal_style,
+            fontSize=8,
+            textColor=colors.HexColor('#3B82F6'),
+            alignment=TA_CENTER
+        )
+
         pr_data = [['#', 'Title', 'Author', 'State', 'AI']]
         for pr in all_prs:
             # Use Paragraph for title to handle long text with proper wrapping
             title_para = Paragraph(pr.title, title_style)
+            # Create clickable link for PR number
+            pr_link = Paragraph(f'<a href="{pr.html_url}" color="blue">#{pr.number}</a>', link_style)
             pr_data.append([
-                f"#{pr.number}",
+                pr_link,
                 title_para,
                 pr.user.login,
                 'Merged' if pr.merged_at else pr.state.capitalize(),
