@@ -2,10 +2,52 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
+from streamlit_oauth import OAuth2Component
+from github import Github
 from pr_fetcher import fetch_prs_for_month, fetch_prs_for_date_range, parse_repo_url, fetch_comments_for_prs
 from pr_analyzer import analyze_prs, analyze_comparison, is_ai_pr, analyze_contributors
 from pdf_generator import generate_pdf_report
-from config import GITHUB_TOKEN
+from config import GITHUB_TOKEN, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, REDIRECT_URI
+
+GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
+GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
+
+
+def show_login_page():
+    """Show GitHub OAuth login page."""
+    st.markdown("""
+        <div style="
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 60vh;
+            text-align: center;
+        ">
+            <h1 style="color: #1E3A8A; font-size: 2.5rem; margin-bottom: 0.5rem;">🔧 GitHub PR Analyzer</h1>
+            <p style="color: #64748B; font-size: 1.1rem; margin-bottom: 2rem;">
+                Analyze Pull Requests for any GitHub repository
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns([2, 1, 2])
+    with col2:
+        oauth2 = OAuth2Component(
+            GITHUB_CLIENT_ID,
+            GITHUB_CLIENT_SECRET,
+            GITHUB_AUTHORIZE_URL,
+            GITHUB_TOKEN_URL,
+        )
+        result = oauth2.authorize_button(
+            "Login with GitHub",
+            redirect_uri=REDIRECT_URI,
+            scope="repo",
+            key="github_oauth",
+        )
+        if result and "token" in result:
+            st.session_state.github_token = result["token"]["access_token"]
+            st.rerun()
 
 
 def get_pr_data_for_df(prs):
@@ -794,9 +836,18 @@ def main():
     </style>
     """, unsafe_allow_html=True)
 
-    # Check for GitHub token
-    if not GITHUB_TOKEN:
-        st.error("⚠️ GITHUB_TOKEN not found. Please set it in your .env file.")
+    # === AUTH CHECK ===
+    if GITHUB_CLIENT_ID:
+        # OAuth mode: require login
+        if "github_token" not in st.session_state:
+            show_login_page()
+            st.stop()
+        github_token = st.session_state.github_token
+    elif GITHUB_TOKEN:
+        # Fallback: use static token from .env
+        github_token = GITHUB_TOKEN
+    else:
+        st.error("⚠️ No auth configured. Set GITHUB_CLIENT_ID (OAuth) or GITHUB_TOKEN in your .env file.")
         st.stop()
 
     # Header
@@ -805,6 +856,19 @@ def main():
 
     # Sidebar
     with st.sidebar:
+        # User info + logout (OAuth mode only)
+        if GITHUB_CLIENT_ID and "github_token" in st.session_state:
+            try:
+                gh_user = Github(github_token).get_user()
+                st.markdown(f"👤 **{gh_user.login}**")
+            except Exception:
+                pass
+            if st.button("Logout", type="secondary"):
+                del st.session_state.github_token
+                st.session_state.render_blocks = []
+                st.rerun()
+            st.divider()
+
         # Analysis mode with styled header
         st.markdown("""
             <h3 style="
@@ -971,7 +1035,7 @@ def main():
                 with st.spinner(f"Fetching PR data from {len(valid_repos)} repositories..."):
                     for repo_url, owner, repo in valid_repos:
                         if analysis_mode == "Single Month":
-                            prs = fetch_prs_for_month(repo_url, selected_year, selected_month)
+                            prs = fetch_prs_for_month(repo_url, selected_year, selected_month, token=github_token)
                             all_prs.extend(prs)
                         elif analysis_mode == "Date Range":
                             if start_date > end_date:
@@ -979,11 +1043,11 @@ def main():
                                 break
                             start_datetime = datetime.combine(start_date, datetime.min.time())
                             end_datetime = datetime.combine(end_date, datetime.max.time())
-                            prs = fetch_prs_for_date_range(repo_url, start_datetime, end_datetime)
+                            prs = fetch_prs_for_date_range(repo_url, start_datetime, end_datetime, token=github_token)
                             all_prs.extend(prs)
                         elif analysis_mode == "Compare Months":
-                            prs_month1 = fetch_prs_for_month(repo_url, selected_year, selected_month)
-                            prs_month2 = fetch_prs_for_month(repo_url, compare_year, compare_month)
+                            prs_month1 = fetch_prs_for_month(repo_url, selected_year, selected_month, token=github_token)
+                            prs_month2 = fetch_prs_for_month(repo_url, compare_year, compare_month, token=github_token)
                             all_prs.extend([(pr, 'month1') for pr in prs_month1])
                             all_prs.extend([(pr, 'month2') for pr in prs_month2])
 
@@ -1043,7 +1107,7 @@ def main():
                 try:
                     with st.spinner(f"Fetching PR data for {owner}/{repo}..."):
                         if analysis_mode == "Single Month":
-                            prs = fetch_prs_for_month(repo_url, selected_year, selected_month)
+                            prs = fetch_prs_for_month(repo_url, selected_year, selected_month, token=github_token)
                             period_name = f"{month_names[selected_month - 1]} {selected_year}"
                             if not prs:
                                 blocks.append({'type': 'warning', 'text': f"No PRs found for {period_name}"})
@@ -1065,7 +1129,7 @@ def main():
                             else:
                                 start_datetime = datetime.combine(start_date, datetime.min.time())
                                 end_datetime = datetime.combine(end_date, datetime.max.time())
-                                prs = fetch_prs_for_date_range(repo_url, start_datetime, end_datetime)
+                                prs = fetch_prs_for_date_range(repo_url, start_datetime, end_datetime, token=github_token)
                                 period_name = f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
                                 if not prs:
                                     blocks.append({'type': 'warning', 'text': f"No PRs found for {period_name}"})
@@ -1084,8 +1148,8 @@ def main():
                         elif analysis_mode == "Compare Months":
                             month1_name = f"{month_names[selected_month - 1]} {selected_year}"
                             month2_name = f"{month_names[compare_month - 1]} {compare_year}"
-                            prs_month1 = fetch_prs_for_month(repo_url, selected_year, selected_month)
-                            prs_month2 = fetch_prs_for_month(repo_url, compare_year, compare_month)
+                            prs_month1 = fetch_prs_for_month(repo_url, selected_year, selected_month, token=github_token)
+                            prs_month2 = fetch_prs_for_month(repo_url, compare_year, compare_month, token=github_token)
                             if not prs_month1 and not prs_month2:
                                 blocks.append({'type': 'warning', 'text': f"No PRs found for either {month1_name} or {month2_name}"})
                             else:

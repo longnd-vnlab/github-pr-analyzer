@@ -11,8 +11,13 @@ def _get_env_or_default(key: str, default: str = '') -> str:
     return value if value.strip() else default
 
 
-# GitHub Token
+# GitHub Token (optional if OAuth is configured)
 GITHUB_TOKEN = _get_env_or_default('GITHUB_TOKEN', '')
+
+# GitHub OAuth App credentials
+GITHUB_CLIENT_ID = _get_env_or_default('GITHUB_CLIENT_ID', '')
+GITHUB_CLIENT_SECRET = _get_env_or_default('GITHUB_CLIENT_SECRET', '')
+REDIRECT_URI = _get_env_or_default('REDIRECT_URI', 'http://localhost:8501/component/streamlit_oauth.authorize_button')
 
 # ============================================
 # AI Detection Configuration

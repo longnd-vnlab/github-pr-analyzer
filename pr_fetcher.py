@@ -41,24 +41,17 @@ def is_pr_in_date_range(pr: PullRequest, start_date: datetime, end_date: datetim
     return start_date_only <= pr_date_only <= end_date_only
 
 
-def fetch_prs_for_month(repo_identifier: str, year: int, month: int, state: str = 'all') -> List[PullRequest]:
+def fetch_prs_for_month(repo_identifier: str, year: int, month: int, state: str = 'all', token: str = None) -> List[PullRequest]:
     """Fetch all PRs for a repo created in the specified month."""
-    # Parse owner/repo
     if '/' in repo_identifier:
         owner, repo_name = parse_repo_url(repo_identifier)
     else:
         raise ValueError(f"Invalid repo identifier: {repo_identifier}")
 
-    # Initialize client
-    client = get_github_client()
-
-    # Get repository
+    client = get_github_client(token=token)
     repo = client.get_repo(f"{owner}/{repo_name}")
-
-    # Fetch PRs
     all_prs = repo.get_pulls(state=state, sort='created', direction='desc')
 
-    # Filter by month
     prs_in_month = [
         pr for pr in all_prs
         if is_pr_in_month(pr, year, month)
@@ -67,24 +60,17 @@ def fetch_prs_for_month(repo_identifier: str, year: int, month: int, state: str 
     return prs_in_month
 
 
-def fetch_prs_for_date_range(repo_identifier: str, start_date: datetime, end_date: datetime, state: str = 'all') -> List[PullRequest]:
+def fetch_prs_for_date_range(repo_identifier: str, start_date: datetime, end_date: datetime, state: str = 'all', token: str = None) -> List[PullRequest]:
     """Fetch all PRs for a repo created within the specified date range."""
-    # Parse owner/repo
     if '/' in repo_identifier:
         owner, repo_name = parse_repo_url(repo_identifier)
     else:
         raise ValueError(f"Invalid repo identifier: {repo_identifier}")
 
-    # Initialize client
-    client = get_github_client()
-
-    # Get repository
+    client = get_github_client(token=token)
     repo = client.get_repo(f"{owner}/{repo_name}")
-
-    # Fetch PRs
     all_prs = repo.get_pulls(state=state, sort='created', direction='desc')
 
-    # Filter by date range
     prs_in_range = [
         pr for pr in all_prs
         if is_pr_in_date_range(pr, start_date, end_date)
